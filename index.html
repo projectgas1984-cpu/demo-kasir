@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Demo Scanner Kasir (GitHub Pages)</title>
+  <title>Demo Scanner Kasir Akurat</title>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <style>
     :root {
@@ -85,6 +85,15 @@
     }
     .zoom-box input { flex: 1; }
 
+    .tips-box {
+      font-size: 12px;
+      color: #475569;
+      background: #f1f5f9;
+      padding: 8px 10px;
+      border-radius: 8px;
+      margin-top: 10px;
+    }
+
     .status-box {
       font-size: 12px;
       padding: 10px;
@@ -114,7 +123,7 @@
       border-bottom: 1px solid #e2e8f0;
     }
     .scan-item:last-child { border-bottom: none; }
-    .code-val { font-family: monospace; font-size: 15px; font-weight: 700; color: var(--primary); }
+    .code-val { font-family: monospace; font-size: 16px; font-weight: 700; color: var(--primary); }
     .code-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
     .qty-badge { background: #dcfce7; color: #166534; font-weight: 700; padding: 4px 10px; border-radius: 20px; font-size: 13px; }
   </style>
@@ -123,8 +132,8 @@
 
 <div class="container">
   <div class="header">
-    <h1>Demo Scanner Kasir</h1>
-    <span class="badge">DIRECT HTTPS</span>
+    <h1>Demo Scanner Kasir v2</h1>
+    <span class="badge">ANTI-SALAH BACA</span>
   </div>
 
   <div class="card">
@@ -142,14 +151,18 @@
       <button id="btnStop" class="btn-stop" onclick="stopScanner()" disabled>⏹ Matikan</button>
     </div>
 
+    <div class="tips-box">
+      💡 <b>Tips Scan Tablet:</b> Beri jarak sekitar <b>15–20 cm</b> antara barang dan kamera agar fokus tajam. Jika barcode kecil, gunakan slider <b>Zoom 1.5x–2.0x</b>.
+    </div>
+
     <div id="statusBox" class="status-box">
-      Status: Siap menguji kamera langsung tanpa iframe.
+      Status: Siap dengan filter validasi 3x konsensus.
     </div>
   </div>
 
   <div class="card">
     <div class="scan-list-header">
-      <h2>Hasil Scan Terbaca (<span id="totalCount">0</span>)</h2>
+      <h2>Hasil Scan Valid (<span id="totalCount">0</span>)</h2>
       <button class="btn-clear" onclick="clearResults()">Hapus Semua</button>
     </div>
     <div id="resultList">
@@ -164,8 +177,13 @@
   let html5QrCode = null;
   let isScanning = false;
   let torchOn = false;
-  let lastCode = "";
-  let lastScanTime = 0;
+
+  // Variabel Pengaman Konsensus & Jeda
+  let candidateCode = "";
+  let candidateCount = 0;
+  let lastAcceptedCode = "";
+  let lastAcceptedTime = 0;
+
   const scannedItems = {};
 
   function playBeep() {
@@ -190,27 +208,48 @@
     box.className = "status-box" + (type === "error" ? " error" : type === "success" ? " success" : "");
   }
 
+  // Validasi Checksum Matematika Standar Barcode Ritel (EAN-13, EAN-8, UPC-A)
+  function isValidRetailBarcode(code, formatName) {
+    if (formatName === "EAN_13" || formatName === "EAN_8" || formatName === "UPC_A") {
+      if (!/^\d+$/.test(code)) return false;
+      const digits = code.split("").map(Number);
+      const checkDigit = digits.pop();
+      let sum = 0;
+      digits.reverse().forEach((d, idx) => {
+        sum += (idx % 2 === 0) ? d * 3 : d * 1;
+      });
+      const calculatedCheck = (10 - (sum % 10)) % 10;
+      return checkDigit === calculatedCheck;
+    }
+    // Untuk QR_CODE atau CODE_128 minimal panjang 4 karakter
+    return code.length >= 4;
+  }
+
   async function startScanner() {
     if (isScanning) return;
     playBeep();
-    updateStatus("Meminta izin kamera ke sistem Android...");
+    updateStatus("Membuka kamera HD...");
 
     try {
+      // Hanya aktifkan format barcode produk ritel & QR (buang CODE_39 yang sering salah baca)
       const formatsToSupport = [
         Html5QrcodeSupportedFormats.EAN_13,
         Html5QrcodeSupportedFormats.EAN_8,
         Html5QrcodeSupportedFormats.UPC_A,
-        Html5QrcodeSupportedFormats.UPC_E,
         Html5QrcodeSupportedFormats.CODE_128,
-        Html5QrcodeSupportedFormats.CODE_39,
         Html5QrcodeSupportedFormats.QR_CODE
       ];
 
       html5QrCode = new Html5Qrcode("reader", { formatsToSupport: formatsToSupport, verbose: false });
 
       const config = {
-        fps: 15,
-        qrbox: { width: 280, height: 150 }
+        fps: 20,
+        qrbox: { width: 280, height: 120 }, // Kotak ramping agar fokus hanya pada garis barcode
+        videoConstraints: {
+          facingMode: "environment",
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        }
       };
 
       await html5QrCode.start(
@@ -223,7 +262,7 @@
       isScanning = true;
       document.getElementById("btnStart").style.display = "none";
       document.getElementById("btnStop").disabled = false;
-      updateStatus("✅ Kamera berhasil menyala! Arahkan barcode kemasan ke kotak pemindai.", "success");
+      updateStatus("✅ Kamera aktif! Arahkan barcode sejajar dengan kotak pemindai.", "success");
       checkCameraCapabilities();
 
     } catch (err) {
@@ -269,14 +308,39 @@
   }
 
   function onScanSuccess(decodedText, decodedResult) {
-    const now = Date.now();
-    if (decodedText === lastCode && (now - lastScanTime) < 1500) return;
+    const formatName = decodedResult?.result?.format?.formatName || "BARCODE";
 
-    lastCode = decodedText;
-    lastScanTime = now;
+    // 1. Tolak jika tidak lolos rumus checksum barcode ritel
+    if (!isValidRetailBarcode(decodedText, formatName)) {
+      return;
+    }
+
+    // 2. Wajib terbaca SAMA PERSIS 3 kali berturut-turut untuk mencegah salah baca
+    if (decodedText === candidateCode) {
+      candidateCount++;
+    } else {
+      candidateCode = decodedText;
+      candidateCount = 1;
+    }
+
+    if (candidateCount < 3) {
+      return; // Belum mencapai 3x pembacaan identik, abaikan dulu
+    }
+
+    // Reset kandidat setelah lolos
+    candidateCode = "";
+    candidateCount = 0;
+
+    // 3. Jeda 2 detik agar 1 barang yang masih dipegang tidak terhitung ganda
+    const now = Date.now();
+    if (decodedText === lastAcceptedCode && (now - lastAcceptedTime) < 2000) {
+      return;
+    }
+
+    lastAcceptedCode = decodedText;
+    lastAcceptedTime = now;
     playBeep();
 
-    const formatName = decodedResult?.result?.format?.formatName || "BARCODE";
     const timeStr = new Date().toLocaleTimeString("id-ID");
 
     if (scannedItems[decodedText]) {
@@ -286,7 +350,7 @@
       scannedItems[decodedText] = { format: formatName, qty: 1, time: timeStr };
     }
 
-    updateStatus(`Terbaca: <b>${decodedText}</b> (${formatName})`, "success");
+    updateStatus(`✅ Sah Terbaca: <b>${decodedText}</b> (${formatName})`, "success");
     renderResults();
   }
 
@@ -297,6 +361,8 @@
       html5QrCode.clear();
       isScanning = false;
       torchOn = false;
+      candidateCode = "";
+      candidateCount = 0;
       document.getElementById("btnStart").style.display = "block";
       document.getElementById("btnStop").disabled = true;
       document.getElementById("btnTorch").disabled = true;
@@ -340,7 +406,9 @@
 
   function clearResults() {
     for (let k in scannedItems) delete scannedItems[k];
-    lastCode = "";
+    lastAcceptedCode = "";
+    candidateCode = "";
+    candidateCount = 0;
     renderResults();
   }
 </script>
