@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Demo Scanner Kasir (GitHub Pages)</title>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    :root {
+      --primary: #1e3a8a;
+      --accent: #eab308;
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --text: #0f172a;
+      --muted: #64748b;
+      --danger: #dc2626;
+      --success: #16a34a;
+    }
+    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { margin: 0; padding: 16px; background: var(--bg); color: var(--text); }
+    .container { max-width: 540px; margin: 0 auto; }
+
+    .header {
+      background: var(--primary);
+      color: white;
+      padding: 14px 16px;
+      border-radius: 12px;
+      margin-bottom: 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .header h1 { font-size: 16px; margin: 0; }
+    .badge { background: var(--accent); color: #000; font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 20px; }
+
+    .card {
+      background: var(--card);
+      border-radius: 12px;
+      padding: 14px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      margin-bottom: 14px;
+    }
+
+    #reader {
+      width: 100%;
+      border-radius: 10px;
+      overflow: hidden;
+      background: #000;
+      min-height: 260px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #94a3b8;
+      font-size: 13px;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    button {
+      border: none;
+      padding: 12px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .btn-start { background: var(--primary); color: white; grid-column: span 2; }
+    .btn-stop { background: var(--danger); color: white; }
+    .btn-torch { background: #f1f5f9; color: var(--text); border: 1px solid #cbd5e1; }
+    .btn-torch.active { background: var(--accent); color: #000; border-color: #ca8a04; }
+
+    .zoom-box {
+      margin-top: 12px;
+      display: none;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .zoom-box input { flex: 1; }
+
+    .status-box {
+      font-size: 12px;
+      padding: 10px;
+      border-radius: 8px;
+      background: #eff6ff;
+      color: #1e40af;
+      margin-top: 10px;
+      word-break: break-word;
+    }
+    .status-box.success { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+    .status-box.error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+
+    .scan-list-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .scan-list-header h2 { font-size: 15px; margin: 0; }
+    .btn-clear { background: none; color: var(--danger); padding: 4px 8px; font-size: 12px; }
+
+    .scan-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    .scan-item:last-child { border-bottom: none; }
+    .code-val { font-family: monospace; font-size: 15px; font-weight: 700; color: var(--primary); }
+    .code-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .qty-badge { background: #dcfce7; color: #166534; font-weight: 700; padding: 4px 10px; border-radius: 20px; font-size: 13px; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <div class="header">
+    <h1>Demo Scanner Kasir</h1>
+    <span class="badge">DIRECT HTTPS</span>
+  </div>
+
+  <div class="card">
+    <div id="reader">Kamera siap. Tekan tombol biru di bawah.</div>
+
+    <div class="zoom-box" id="zoomContainer">
+      <span>Zoom:</span>
+      <input type="range" id="zoomSlider" min="1" max="5" step="0.1" value="1">
+      <span id="zoomVal">1.0x</span>
+    </div>
+
+    <div class="controls">
+      <button id="btnStart" class="btn-start" onclick="startScanner()">📷 Aktifkan Kamera Belakang</button>
+      <button id="btnTorch" class="btn-torch" onclick="toggleTorch()" disabled>🔦 Senter: OFF</button>
+      <button id="btnStop" class="btn-stop" onclick="stopScanner()" disabled>⏹ Matikan</button>
+    </div>
+
+    <div id="statusBox" class="status-box">
+      Status: Siap menguji kamera langsung tanpa iframe.
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="scan-list-header">
+      <h2>Hasil Scan Terbaca (<span id="totalCount">0</span>)</h2>
+      <button class="btn-clear" onclick="clearResults()">Hapus Semua</button>
+    </div>
+    <div id="resultList">
+      <div style="text-align:center; color:#94a3b8; font-size:13px; padding:16px 0;">
+        Belum ada barang yang di-scan.
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  let html5QrCode = null;
+  let isScanning = false;
+  let torchOn = false;
+  let lastCode = "";
+  let lastScanTime = 0;
+  const scannedItems = {};
+
+  function playBeep() {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(1200, ctx.currentTime);
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.12);
+    } catch (e) {}
+    if (navigator.vibrate) navigator.vibrate(100);
+  }
+
+  function updateStatus(msg, type = "info") {
+    const box = document.getElementById("statusBox");
+    box.innerHTML = msg;
+    box.className = "status-box" + (type === "error" ? " error" : type === "success" ? " success" : "");
+  }
+
+  async function startScanner() {
+    if (isScanning) return;
+    playBeep();
+    updateStatus("Meminta izin kamera ke sistem Android...");
+
+    try {
+      const formatsToSupport = [
+        Html5QrcodeSupportedFormats.EAN_13,
+        Html5QrcodeSupportedFormats.EAN_8,
+        Html5QrcodeSupportedFormats.UPC_A,
+        Html5QrcodeSupportedFormats.UPC_E,
+        Html5QrcodeSupportedFormats.CODE_128,
+        Html5QrcodeSupportedFormats.CODE_39,
+        Html5QrcodeSupportedFormats.QR_CODE
+      ];
+
+      html5QrCode = new Html5Qrcode("reader", { formatsToSupport: formatsToSupport, verbose: false });
+
+      const config = {
+        fps: 15,
+        qrbox: { width: 280, height: 150 }
+      };
+
+      await html5QrCode.start(
+        { facingMode: "environment" },
+        config,
+        onScanSuccess,
+        () => {}
+      );
+
+      isScanning = true;
+      document.getElementById("btnStart").style.display = "none";
+      document.getElementById("btnStop").disabled = false;
+      updateStatus("✅ Kamera berhasil menyala! Arahkan barcode kemasan ke kotak pemindai.", "success");
+      checkCameraCapabilities();
+
+    } catch (err) {
+      updateStatus(`❌ Gagal membuka kamera: <b>${err.name || err}</b> - ${err.message || ""}`, "error");
+    }
+  }
+
+  function checkCameraCapabilities() {
+    try {
+      const capabilities = html5QrCode.getRunningTrackCapabilities();
+      if (capabilities.torch) {
+        document.getElementById("btnTorch").disabled = false;
+      }
+      if (capabilities.zoom) {
+        const zoomContainer = document.getElementById("zoomContainer");
+        const slider = document.getElementById("zoomSlider");
+        zoomContainer.style.display = "flex";
+        slider.min = capabilities.zoom.min || 1;
+        slider.max = Math.min(capabilities.zoom.max || 4, 5);
+        slider.step = capabilities.zoom.step || 0.1;
+        slider.value = capabilities.zoom.min || 1;
+
+        slider.oninput = function() {
+          const val = parseFloat(this.value);
+          document.getElementById("zoomVal").innerText = val.toFixed(1) + "x";
+          html5QrCode.applyVideoConstraints({ advanced: [{ zoom: val }] });
+        };
+      }
+    } catch (e) {}
+  }
+
+  async function toggleTorch() {
+    if (!isScanning || !html5QrCode) return;
+    try {
+      torchOn = !torchOn;
+      await html5QrCode.applyVideoConstraints({ advanced: [{ torch: torchOn }] });
+      const btn = document.getElementById("btnTorch");
+      btn.innerText = torchOn ? "🔦 Senter: ON" : "🔦 Senter: OFF";
+      btn.classList.toggle("active", torchOn);
+    } catch (e) {
+      updateStatus("Perangkat ini tidak mendukung kontrol senter.", "error");
+    }
+  }
+
+  function onScanSuccess(decodedText, decodedResult) {
+    const now = Date.now();
+    if (decodedText === lastCode && (now - lastScanTime) < 1500) return;
+
+    lastCode = decodedText;
+    lastScanTime = now;
+    playBeep();
+
+    const formatName = decodedResult?.result?.format?.formatName || "BARCODE";
+    const timeStr = new Date().toLocaleTimeString("id-ID");
+
+    if (scannedItems[decodedText]) {
+      scannedItems[decodedText].qty += 1;
+      scannedItems[decodedText].time = timeStr;
+    } else {
+      scannedItems[decodedText] = { format: formatName, qty: 1, time: timeStr };
+    }
+
+    updateStatus(`Terbaca: <b>${decodedText}</b> (${formatName})`, "success");
+    renderResults();
+  }
+
+  async function stopScanner() {
+    if (!isScanning || !html5QrCode) return;
+    try {
+      await html5QrCode.stop();
+      html5QrCode.clear();
+      isScanning = false;
+      torchOn = false;
+      document.getElementById("btnStart").style.display = "block";
+      document.getElementById("btnStop").disabled = true;
+      document.getElementById("btnTorch").disabled = true;
+      document.getElementById("btnTorch").innerText = "🔦 Senter: OFF";
+      document.getElementById("btnTorch").classList.remove("active");
+      document.getElementById("zoomContainer").style.display = "none";
+      document.getElementById("reader").innerHTML = "Kamera dimatikan.";
+      updateStatus("Status: Kamera dimatikan.");
+    } catch (e) {}
+  }
+
+  function renderResults() {
+    const listEl = document.getElementById("resultList");
+    const keys = Object.keys(scannedItems).reverse();
+    let totalItem = 0;
+
+    if (keys.length === 0) {
+      listEl.innerHTML = `<div style="text-align:center; color:#94a3b8; font-size:13px; padding:16px 0;">Belum ada barang yang di-scan.</div>`;
+      document.getElementById("totalCount").innerText = "0";
+      return;
+    }
+
+    let html = "";
+    keys.forEach(code => {
+      const item = scannedItems[code];
+      totalItem += item.qty;
+      html += `
+        <div class="scan-item">
+          <div>
+            <div class="code-val">${code}</div>
+            <div class="code-meta">Format: ${item.format} • Jam: ${item.time}</div>
+          </div>
+          <div class="qty-badge">${item.qty}x</div>
+        </div>
+      `;
+    });
+
+    listEl.innerHTML = html;
+    document.getElementById("totalCount").innerText = totalItem;
+  }
+
+  function clearResults() {
+    for (let k in scannedItems) delete scannedItems[k];
+    lastCode = "";
+    renderResults();
+  }
+</script>
+
+</body>
+</html>
