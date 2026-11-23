@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Demo AI Pengenal Foto Barang</title>
+  <!-- Pustaka TensorFlow.js, MobileNet, dan KNN Classifier -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.1/dist/mobilenet.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/knn-classifier@1.2.4/dist/knn-classifier.min.js"></script>
+  <style>
+    :root {
+      --primary: #1e3a8a;
+      --accent: #eab308;
+      --bg: #f1f5f9;
+      --card: #ffffff;
+      --text: #0f172a;
+      --muted: #64748b;
+      --danger: #dc2626;
+      --success: #16a34a;
+    }
+    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { margin: 0; padding: 14px; background: var(--bg); color: var(--text); }
+    .container { max-width: 960px; margin: 0 auto; }
+
+    .header {
+      background: var(--primary);
+      color: white;
+      padding: 14px 18px;
+      border-radius: 12px;
+      margin-bottom: 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .header h1 { font-size: 17px; margin: 0; }
+    .badge { background: var(--accent); color: #000; font-size: 11px; font-weight: 800; padding: 4px 10px; border-radius: 20px; }
+
+    .grid-2 { display: grid; grid-template-columns: 1.15fr 1fr; gap: 14px; align-items: start; }
+    @media (max-width: 780px) { .grid-2 { grid-template-columns: 1fr; } }
+
+    .card {
+      background: var(--card);
+      border-radius: 12px;
+      padding: 14px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+      border: 1px solid #e2e8f0;
+      margin-bottom: 14px;
+    }
+    .card-title { font-size: 15px; font-weight: 700; margin: 0 0 10px 0; display: flex; justify-content: space-between; align-items: center; }
+
+    .video-wrap {
+      position: relative;
+      width: 100%;
+      background: #0f172a;
+      border-radius: 10px;
+      overflow: hidden;
+      min-height: 260px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    video {
+      width: 100%;
+      max-height: 340px;
+      object-fit: cover;
+      display: block;
+    }
+    .guide-box {
+      position: absolute;
+      width: 68%;
+      height: 68%;
+      border: 2px dashed rgba(234, 179, 8, 0.85);
+      border-radius: 14px;
+      pointer-events: none;
+      box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.25);
+    }
+
+    /* Live Prediction Bar */
+    .pred-panel {
+      background: #f8fafc;
+      border: 1px solid #cbd5e1;
+      border-radius: 10px;
+      padding: 12px;
+      margin-top: 10px;
+    }
+    .pred-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+    .pred-label { font-size: 16px; font-weight: 800; color: var(--primary); }
+    .pred-conf { font-size: 13px; font-weight: 700; color: var(--muted); }
+    .progress-bg { width: 100%; height: 10px; background: #e2e8f0; border-radius: 99px; overflow: hidden; }
+    .progress-fill { height: 100%; width: 0%; background: var(--primary); transition: width 0.15s, background 0.15s; }
+    .progress-fill.high { background: var(--success); }
+
+    .btn {
+      border: none;
+      padding: 11px 14px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-accent { background: var(--accent); color: #000; }
+    .btn-success { background: var(--success); color: white; }
+    .btn-danger { background: var(--danger); color: white; }
+    .btn-outline { background: #f8fafc; color: var(--text); border: 1px solid #cbd5e1; }
+    .btn-block { width: 100%; }
+
+    input[type="text"] {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      font-size: 14px;
+      margin-bottom: 8px;
+    }
+
+    /* Trained Items List */
+    .trained-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      margin-bottom: 8px;
+      gap: 10px;
+    }
+    .trained-thumb {
+      width: 46px;
+      height: 46px;
+      border-radius: 6px;
+      object-fit: cover;
+      background: #e2e8f0;
+    }
+    .trained-info { flex: 1; }
+    .trained-name { font-weight: 700; font-size: 14px; }
+    .trained-meta { font-size: 11px; color: var(--muted); }
+
+    /* Simulated Cart */
+    .cart-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px dashed #e2e8f0;
+      font-size: 14px;
+    }
+    .qty-badge { background: #dcfce7; color: #166534; font-weight: 700; padding: 3px 10px; border-radius: 12px; font-size: 12px; }
+
+    .status-banner {
+      background: #eff6ff;
+      color: #1e40af;
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      margin-bottom: 12px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <div class="header">
+    <h1>🤖 Uji Coba AI Pengenal Foto Barang</h1>
+    <span class="badge">VISUAL POS DEMO</span>
+  </div>
+
+  <div id="aiStatusBanner" class="status-banner">
+    ⏳ Sedang memuat otak AI (MobileNet) ke memori tablet... Mohon tunggu beberapa detik.
+  </div>
+
+  <div class="grid-2">
+    <!-- KOLOM KIRI: KAMERA & DETEKSI REAL-TIME -->
+    <div>
+      <div class="card">
+        <div class="card-title">
+          <span>📷 Kamera Pemindai Visual</span>
+          <button id="btnCam" class="btn btn-primary" onclick="toggleCamera()" disabled>Aktifkan Kamera</button>
+        </div>
+
+        <div class="video-wrap">
+          <video id="webcam" autoplay playsinline muted></video>
+          <div class="guide-box"></div>
+        </div>
+
+        <!-- Hasil Tebakan AI Real-Time -->
+        <div class="pred-panel">
+          <div class="pred-header">
+            <span class="pred-label" id="predName">Belum ada sampel barang</span>
+            <span class="pred-conf" id="predConf">0%</span>
+          </div>
+          <div class="progress-bg">
+            <div class="progress-fill" id="predBar"></div>
+          </div>
+          <div style="margin-top: 10px; display: flex; gap: 8px;">
+            <button id="btnManualAdd" class="btn btn-success btn-block" onclick="manualAddDetected()" disabled>
+              ➕ Masukkan Barang Terdeteksi ke Keranjang
+            </button>
+          </div>
+        </div>
+
+        <div style="margin-top: 10px; font-size: 12px; color: var(--muted); line-height: 1.4;">
+          <b>Cara Kerja Otomatis:</b> Jika kemiripan mencapai <b>≥ 85%</b> secara stabil, barang otomatis masuk ke keranjang (berbunyi <i>beep</i>). Jika di bawah 85%, Anda tetap bisa menekan tombol hijau di atas.
+        </div>
+      </div>
+    </div>
+
+    <!-- KOLOM KANAN: LATIH SAMPEL FOTO & KERANJANG -->
+    <div>
+      <!-- Panel Pendaftaran Foto Barang -->
+      <div class="card">
+        <div class="card-title">1️⃣ Daftarkan Sampel Foto Barang</div>
+        <input type="text" id="sampleName" placeholder="Ketik nama barang (misal: Indomie Goreng)">
+        <button id="btnCapture" class="btn btn-accent btn-block" onclick="captureSample()" disabled>
+          📸 Ambil Foto Sampel (Tekan 3-5x dari sudut berbeda)
+        </button>
+        <div style="font-size: 11px; color: var(--muted); margin-top: 6px;">
+          Tips: Letakkan barang di dalam kotak garis kuning, lalu tekan tombol kuning <b>3 sampai 5 kali</b> sambil sedikit memutar/menggeser posisi barang agar AI mengenali dari berbagai sudut.
+        </div>
+      </div>
+
+      <!-- Daftar Barang yang Sudah Dilatih -->
+      <div class="card">
+        <div class="card-title">
+          <span>2️⃣ Memori Barang Terlatih (<span id="trainedCount">0</span>)</span>
+          <button class="btn btn-outline" style="padding:4px 8px; font-size:11px; color:var(--danger);" onclick="resetAllSamples()">Hapus Semua</button>
+        </div>
+        <div id="trainedList" style="max-height: 210px; overflow-y: auto;">
+          <div style="text-align:center; color:var(--muted); font-size:12px; padding:14px;">
+            Belum ada foto barang yang disimpan.
+          </div>
+        </div>
+      </div>
+
+      <!-- Simulasi Keranjang Kasir -->
+      <div class="card">
+        <div class="card-title">
+          <span>3️⃣ Simulasi Keranjang Masuk (<span id="cartCount">0</span>)</span>
+          <button class="btn btn-outline" style="padding:4px 8px; font-size:11px;" onclick="clearCart()">Reset</button>
+        </div>
+        <div id="cartList">
+          <div style="text-align:center; color:var(--muted); font-size:12px; padding:12px;">
+            Arahkan kamera ke barang yang sudah dilatih untuk melihat deteksi otomatis.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Canvas tersembunyi untuk membuat thumbnail foto kecil -->
+<canvas id="thumbCanvas" width="120" height="120" style="display:none;"></canvas>
+
+<script>
+  let net = null;
+  let classifier = null;
+  let isCameraOn = false;
+  let videoStream = null;
+  let predictLoopId = null;
+
+  // Metadata barang terlatih { nama: { count: 5, thumb: "data:image/jpeg..." } }
+  let trainedMeta = {};
+  let currentTopLabel = "";
+  let currentTopConf = 0;
+
+  // Konsensus otomatis (3x stabil >= 85%)
+  let stableLabel = "";
+  let stableFrames = 0;
+  let lastAddedLabel = "";
+  let lastAddedTime = 0;
+
+  const cart = {};
+
+  window.onload = async function() {
+    try {
+      classifier = knnClassifier.create();
+      net = await mobilenet.load({ version: 2, alpha: 0.5 }); // Ringan & cepat untuk tablet
+      
+      loadSavedDataset();
+      
+      const banner = document.getElementById("aiStatusBanner");
+      banner.style.background = "#dcfce7";
+      banner.style.color = "#166534";
+      banner.innerHTML = "✅ <b>Otak AI Siap!</b> Tekan tombol <b>Aktifkan Kamera</b> untuk mulai melatih dan memindai foto barang.";
+      document.getElementById("btnCam").disabled = false;
+    } catch (err) {
+      document.getElementById("aiStatusBanner").innerHTML = "❌ Gagal memuat model AI: " + err.message;
+    }
+  };
+
+  function playBeep() {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(1200, ctx.currentTime);
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.12);
+    } catch (e) {}
+    if (navigator.vibrate) navigator.vibrate(100);
+  }
+
+  // 1. Kontrol Kamera
+  async function toggleCamera() {
+    const video = document.getElementById("webcam");
+    const btnCam = document.getElementById("btnCam");
+    const btnCapture = document.getElementById("btnCapture");
+
+    if (isCameraOn) {
+      if (predictLoopId) cancelAnimationFrame(predictLoopId);
+      if (videoStream) videoStream.getTracks().forEach(t => t.stop());
+      video.srcObject = null;
+      isCameraOn = false;
+      btnCam.innerText = "Aktifkan Kamera";
+      btnCam.className = "btn btn-primary";
+      btnCapture.disabled = true;
+      return;
+    }
+
+    try {
+      playBeep();
+      videoStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment", width: { ideal: 640 }, height: { ideal: 480 } },
+        audio: false
+      });
+      video.srcObject = videoStream;
+      await video.play();
+      isCameraOn = true;
+      btnCam.innerText = "⏹ Matikan Kamera";
+      btnCam.className = "btn btn-danger";
+      btnCapture.disabled = false;
+
+      startPredictionLoop();
+    } catch (err) {
+      alert("Gagal membuka kamera: " + err.message);
+    }
+  }
+
+  // 2. Mengambil Sampel Foto & Menyimpan Sidik Jari Visual ke AI
+  function captureSample() {
+    if (!isCameraOn || !net) return;
+    const nameInput = document.getElementById("sampleName");
+    const label = nameInput.value.trim();
+    if (!label) {
+      alert("Ketik nama barang terlebih dahulu sebelum mengambil foto sampel!");
+      nameInput.focus();
+      return;
+    }
+
+    const video = document.getElementById("webcam");
+    
+    // Ekstrak fitur gambar menggunakan MobileNet & masukkan ke KNN Classifier
+    const activation = net.infer(video, true);
+    classifier.addExample(activation, label);
+    activation.dispose(); // Bebaskan memori GPU
+
+    // Buat thumbnail kecil untuk ditampilkan di daftar
+    const canvas = document.getElementById("thumbCanvas");
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(video, 0, 0, 120, 120);
+    const thumbData = canvas.toDataURL("image/jpeg", 0.6);
+
+    if (!trainedMeta[label]) {
+      trainedMeta[label] = { count: 1, thumb: thumbData };
+    } else {
+      trainedMeta[label].count += 1;
+      trainedMeta[label].thumb = thumbData;
+    }
+
+    playBeep();
+    saveDatasetToLocal();
+    renderTrainedList();
+  }
+
+  // 3. Loop Prediksi Real-Time
+  async function startPredictionLoop() {
+    const video = document.getElementById("webcam");
+
+    async function loop() {
+      if (!isCameraOn) return;
+
+      if (classifier.getNumClasses() > 0 && video.readyState === 4) {
+        const activation = net.infer(video, true);
+        const result = await classifier.predictClass(activation, 5);
+        activation.dispose();
+
+        const label = result.label;
+        const conf = Math.round((result.confidences[label] || 0) * 100);
+
+        currentTopLabel = label;
+        currentTopConf = conf;
+
+        document.getElementById("predName").innerText = label;
+        document.getElementById("predConf").innerText = conf + "%";
+        
+        const bar = document.getElementById("predBar");
+        bar.style.width = conf + "%";
+        bar.className = conf >= 85 ? "progress-fill high" : "progress-fill";
+        document.getElementById("btnManualAdd").disabled = false;
+
+        // Logika Auto-Add jika akurasi >= 85% stabil selama 5 frame (~0.5 detik)
+        if (conf >= 85) {
+          if (label === stableLabel) {
+            stableFrames++;
+          } else {
+            stableLabel = label;
+            stableFrames = 1;
+          }
+
+          if (stableFrames >= 5) {
+            stableFrames = 0;
+            const now = Date.now();
+            if (label !== lastAddedLabel || (now - lastAddedTime) > 2500) {
+              lastAddedLabel = label;
+              lastAddedTime = now;
+              addItemToCart(label);
+            }
+          }
+        } else {
+          stableFrames = 0;
+        }
+      }
+
+      // Jalankan pengecekan setiap ~120ms agar tablet tetap adem dan responsif
+      setTimeout(() => {
+        if (isCameraOn) predictLoopId = requestAnimationFrame(loop);
+      }, 120);
+    }
+
+    loop();
+  }
+
+  function manualAddDetected() {
+    if (!currentTopLabel) return;
+    addItemToCart(currentTopLabel);
+  }
+
+  function addItemToCart(label) {
+    playBeep();
+    if (cart[label]) {
+      cart[label] += 1;
+    } else {
+      cart[label] = 1;
+    }
+    renderCart();
+  }
+
+  // 4. Simpan & Muat Dataset AI dari Memori Tablet (localStorage)
+  function saveDatasetToLocal() {
+    try {
+      const dataset = classifier.getClassifierDataset();
+      const datasetObj = {};
+      Object.keys(dataset).forEach(key => {
+        const data = dataset[key].dataSync();
+        datasetObj[key] = {
+          data: Array.from(data),
+          shape: dataset[key].shape
+        };
+      });
+      localStorage.setItem("WARUNG_AI_DATASET", JSON.stringify(datasetObj));
+      localStorage.setItem("WARUNG_AI_META", JSON.stringify(trainedMeta));
+    } catch (e) {
+      console.error("Gagal menyimpan dataset AI:", e);
+    }
+  }
+
+  function loadSavedDataset() {
+    try {
+      const rawData = localStorage.getItem("WARUNG_AI_DATASET");
+      const rawMeta = localStorage.getItem("WARUNG_AI_META");
+      if (rawData && rawMeta) {
+        const datasetObj = JSON.parse(rawData);
+        const tensorObj = {};
+        Object.keys(datasetObj).forEach(key => {
+          tensorObj[key] = tf.tensor(datasetObj[key].data, datasetObj[key].shape);
+        });
+        classifier.setClassifierDataset(tensorObj);
+        trainedMeta = JSON.parse(rawMeta);
+        renderTrainedList();
+      }
+    } catch (e) {
+      console.error("Gagal memuat dataset AI:", e);
+    }
+  }
+
+  function deleteClass(label) {
+    try {
+      classifier.clearClass(label);
+    } catch (e) {}
+    delete trainedMeta[label];
+    saveDatasetToLocal();
+    renderTrainedList();
+    if (Object.keys(trainedMeta).length === 0) {
+      document.getElementById("predName").innerText = "Belum ada sampel barang";
+      document.getElementById("predConf").innerText = "0%";
+      document.getElementById("predBar").style.width = "0%";
+      document.getElementById("btnManualAdd").disabled = true;
+    }
+  }
+
+  function resetAllSamples() {
+    classifier.clearAllClasses();
+    trainedMeta = {};
+    localStorage.removeItem("WARUNG_AI_DATASET");
+    localStorage.removeItem("WARUNG_AI_META");
+    renderTrainedList();
+    document.getElementById("predName").innerText = "Belum ada sampel barang";
+    document.getElementById("predConf").innerText = "0%";
+    document.getElementById("predBar").style.width = "0%";
+    document.getElementById("btnManualAdd").disabled = true;
+  }
+
+  function renderTrainedList() {
+    const container = document.getElementById("trainedList");
+    const keys = Object.keys(trainedMeta);
+    document.getElementById("trainedCount").innerText = keys.length;
+
+    if (keys.length === 0) {
+      container.innerHTML = `<div style="text-align:center; color:var(--muted); font-size:12px; padding:14px;">Belum ada foto barang yang disimpan.</div>`;
+      return;
+    }
+
+    let html = "";
+    keys.forEach(k => {
+      const item = trainedMeta[k];
+      html += `
+        <div class="trained-item">
+          <img src="${item.thumb}" class="trained-thumb" alt="${k}">
+          <div class="trained-info">
+            <div class="trained-name">${k}</div>
+            <div class="trained-meta">${item.count} sampel foto tersimpan</div>
+          </div>
+          <button class="btn btn-outline" style="padding:4px 8px; font-size:11px; color:var(--danger);" onclick="deleteClass('${k.replace(/'/g, "\\'")}')">Hapus</button>
+        </div>
+      `;
+    });
+    container.innerHTML = html;
+  }
+
+  function renderCart() {
+    const container = document.getElementById("cartList");
+    const keys = Object.keys(cart);
+    let total = 0;
+
+    if (keys.length === 0) {
+      container.innerHTML = `<div style="text-align:center; color:var(--muted); font-size:12px; padding:12px;">Belum ada item terdeteksi.</div>`;
+      document.getElementById("cartCount").innerText = "0";
+      return;
+    }
+
+    let html = "";
+    keys.forEach(k => {
+      total += cart[k];
+      html += `
+        <div class="cart-item">
+          <strong>${k}</strong>
+          <span class="qty-badge">${cart[k]}x</span>
+        </div>
+      `;
+    });
+    container.innerHTML = html;
+    document.getElementById("cartCount").innerText = total;
+  }
+
+  function clearCart() {
+    for (let k in cart) delete cart[k];
+    lastAddedLabel = "";
+    renderCart();
+  }
+</script>
+
+</body>
+</html>
