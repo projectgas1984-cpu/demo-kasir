@@ -3,189 +3,595 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Demo Scanner Kasir Akurat</title>
+  <title>Sistem Kasir Warung - POS</title>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <style>
     :root {
       --primary: #1e3a8a;
+      --primary-light: #eff6ff;
       --accent: #eab308;
-      --bg: #f8fafc;
+      --bg: #f1f5f9;
       --card: #ffffff;
       --text: #0f172a;
       --muted: #64748b;
+      --border: #e2e8f0;
       --danger: #dc2626;
       --success: #16a34a;
+      --warning: #d97706;
     }
     * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    body { margin: 0; padding: 16px; background: var(--bg); color: var(--text); }
-    .container { max-width: 540px; margin: 0 auto; }
+    body { margin: 0; background: var(--bg); color: var(--text); padding-bottom: 80px; }
 
-    .header {
+    /* Top Bar */
+    .topbar {
       background: var(--primary);
       color: white;
-      padding: 14px 16px;
-      border-radius: 12px;
-      margin-bottom: 14px;
+      padding: 14px 20px;
       display: flex;
       justify-content: space-between;
       align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.12);
     }
-    .header h1 { font-size: 16px; margin: 0; }
-    .badge { background: var(--accent); color: #000; font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 20px; }
+    .topbar h1 { font-size: 18px; margin: 0; font-weight: 700; }
+    .sync-status {
+      font-size: 12px;
+      background: rgba(255,255,255,0.15);
+      padding: 5px 10px;
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+    }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: #94a3b8; }
+    .dot.online { background: #4ade80; }
+    .dot.offline { background: #f87171; }
 
+    /* Container */
+    .container { max-width: 1024px; margin: 0 auto; padding: 16px; }
+
+    /* Bottom Navigation (Tablet & Mobile Friendly) */
+    .bottom-nav {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: var(--card);
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-around;
+      padding: 8px 0;
+      z-index: 50;
+      box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
+    }
+    .nav-btn {
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      padding: 6px 16px;
+      border-radius: 10px;
+      cursor: pointer;
+    }
+    .nav-btn span.icon { font-size: 20px; }
+    .nav-btn.active { color: var(--primary); background: var(--primary-light); }
+
+    /* Views */
+    .view-section { display: none; }
+    .view-section.active { display: block; }
+
+    /* Cards & Grid */
     .card {
       background: var(--card);
       border-radius: 12px;
-      padding: 14px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-      margin-bottom: 14px;
+      padding: 16px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+      border: 1px solid var(--border);
+      margin-bottom: 16px;
     }
+    .card-title { font-size: 16px; font-weight: 700; margin: 0 0 12px 0; display: flex; justify-content: space-between; align-items: center; }
 
-    #reader {
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 768px) { .grid-2 { grid-template-columns: 1fr; } }
+
+    /* Forms */
+    .form-group { margin-bottom: 12px; }
+    label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
+    input[type="text"], input[type="number"], select {
       width: 100%;
-      border-radius: 10px;
-      overflow: hidden;
-      background: #000;
-      min-height: 260px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: #94a3b8;
-      font-size: 13px;
+      padding: 10px 12px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      font-size: 14px;
+      background: #fff;
     }
+    input:focus, select:focus { outline: none; border-color: var(--primary); }
 
-    .controls {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
-      margin-top: 12px;
-    }
-    button {
+    .input-with-btn { display: flex; gap: 8px; }
+    .input-with-btn input { flex: 1; }
+
+    /* Buttons */
+    .btn {
       border: none;
-      padding: 12px;
+      padding: 10px 14px;
       border-radius: 8px;
       font-weight: 600;
-      font-size: 14px;
-      cursor: pointer;
-    }
-    button:disabled { opacity: 0.4; cursor: not-allowed; }
-
-    .btn-start { background: var(--primary); color: white; grid-column: span 2; }
-    .btn-stop { background: var(--danger); color: white; }
-    .btn-torch { background: #f1f5f9; color: var(--text); border: 1px solid #cbd5e1; }
-    .btn-torch.active { background: var(--accent); color: #000; border-color: #ca8a04; }
-
-    .zoom-box {
-      margin-top: 12px;
-      display: none;
-      align-items: center;
-      gap: 10px;
       font-size: 13px;
-      color: var(--muted);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
     }
-    .zoom-box input { flex: 1; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-accent { background: var(--accent); color: #000; }
+    .btn-outline { background: #f8fafc; color: var(--text); border: 1px solid #cbd5e1; }
+    .btn-success { background: var(--success); color: white; }
+    .btn-danger { background: var(--danger); color: white; }
+    .btn-block { width: 100%; padding: 12px; font-size: 14px; }
 
-    .tips-box {
-      font-size: 12px;
-      color: #475569;
-      background: #f1f5f9;
-      padding: 8px 10px;
-      border-radius: 8px;
-      margin-top: 10px;
-    }
-
-    .status-box {
-      font-size: 12px;
+    /* Scanner Box inside Product Form */
+    #scannerWrapper {
+      display: none;
+      background: #0f172a;
+      border-radius: 10px;
       padding: 10px;
-      border-radius: 8px;
-      background: #eff6ff;
-      color: #1e40af;
-      margin-top: 10px;
-      word-break: break-word;
+      margin-bottom: 12px;
     }
-    .status-box.success { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
-    .status-box.error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+    #reader { width: 100%; border-radius: 8px; overflow: hidden; }
+    .scanner-tools { display: flex; gap: 8px; margin-top: 8px; }
 
-    .scan-list-header {
+    /* Product List Table/Cards */
+    .filter-bar { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+    .filter-bar input { flex: 1; min-width: 200px; }
+
+    .prod-item {
       display: flex;
       justify-content: space-between;
       align-items: center;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
       margin-bottom: 8px;
+      background: #fff;
     }
-    .scan-list-header h2 { font-size: 15px; margin: 0; }
-    .btn-clear { background: none; color: var(--danger); padding: 4px 8px; font-size: 12px; }
+    .prod-item:hover { border-color: #93c5fd; }
+    .prod-name { font-weight: 700; font-size: 14px; color: var(--text); }
+    .prod-meta { font-size: 12px; color: var(--muted); margin-top: 3px; }
+    .prod-price { font-weight: 700; font-size: 15px; color: var(--primary); text-align: right; }
 
-    .scan-item {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 10px 0;
-      border-bottom: 1px solid #e2e8f0;
+    .badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 12px;
+      margin-top: 4px;
     }
-    .scan-item:last-child { border-bottom: none; }
-    .code-val { font-family: monospace; font-size: 16px; font-weight: 700; color: var(--primary); }
-    .code-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
-    .qty-badge { background: #dcfce7; color: #166534; font-weight: 700; padding: 4px 10px; border-radius: 20px; font-size: 13px; }
+    .badge-ok { background: #dcfce7; color: #166534; }
+    .badge-low { background: #fee2e2; color: #991b1b; }
+    .badge-nostock { background: #f1f5f9; color: #475569; }
+
+    /* Toast Notification */
+    .toast {
+      position: fixed;
+      top: 70px;
+      right: 16px;
+      background: #1e293b;
+      color: white;
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      z-index: 100;
+      display: none;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
   </style>
 </head>
 <body>
 
-<div class="container">
-  <div class="header">
-    <h1>Demo Scanner Kasir v2</h1>
-    <span class="badge">ANTI-SALAH BACA</span>
-  </div>
-
-  <div class="card">
-    <div id="reader">Kamera siap. Tekan tombol biru di bawah.</div>
-
-    <div class="zoom-box" id="zoomContainer">
-      <span>Zoom:</span>
-      <input type="range" id="zoomSlider" min="1" max="5" step="0.1" value="1">
-      <span id="zoomVal">1.0x</span>
-    </div>
-
-    <div class="controls">
-      <button id="btnStart" class="btn-start" onclick="startScanner()">📷 Aktifkan Kamera Belakang</button>
-      <button id="btnTorch" class="btn-torch" onclick="toggleTorch()" disabled>🔦 Senter: OFF</button>
-      <button id="btnStop" class="btn-stop" onclick="stopScanner()" disabled>⏹ Matikan</button>
-    </div>
-
-    <div class="tips-box">
-      💡 <b>Tips Scan Tablet:</b> Beri jarak sekitar <b>15–20 cm</b> antara barang dan kamera agar fokus tajam. Jika barcode kecil, gunakan slider <b>Zoom 1.5x–2.0x</b>.
-    </div>
-
-    <div id="statusBox" class="status-box">
-      Status: Siap dengan filter validasi 3x konsensus.
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="scan-list-header">
-      <h2>Hasil Scan Valid (<span id="totalCount">0</span>)</h2>
-      <button class="btn-clear" onclick="clearResults()">Hapus Semua</button>
-    </div>
-    <div id="resultList">
-      <div style="text-align:center; color:#94a3b8; font-size:13px; padding:16px 0;">
-        Belum ada barang yang di-scan.
-      </div>
-    </div>
+<div class="topbar">
+  <h1>🏪 Kasir Warung POS</h1>
+  <div class="sync-status" onclick="syncProdukFromServer()">
+    <span class="dot" id="connDot"></span>
+    <span id="connText">Belum Terhubung</span>
   </div>
 </div>
 
+<div id="toast" class="toast"></div>
+
+<div class="container">
+
+  <!-- TAB 1: KASIR (Akan dibangun penuh pada Tahap 3) -->
+  <div id="view-kasir" class="view-section">
+    <div class="card" style="text-align:center; padding: 40px 20px;">
+      <div style="font-size: 48px; margin-bottom: 10px;">🛒</div>
+      <h2 style="margin: 0 0 8px 0;">Layar Transaksi Kasir (Tahap 3)</h2>
+      <p style="color: var(--muted); font-size: 14px; max-width: 460px; margin: 0 auto 20px auto;">
+        Saat ini kita berada di <b>Tahap 2</b>. Pastikan koneksi API sudah aktif dan lengkapi daftar barang warung Anda pada tab <b>Produk & Stok</b> terlebih dahulu.
+      </p>
+      <button class="btn btn-primary" onclick="switchTab('produk')">Buka Kelola Produk & Stok →</button>
+    </div>
+  </div>
+
+  <!-- TAB 2: MASTER PRODUK & STOK (Fokus Utama Tahap 2) -->
+  <div id="view-produk" class="view-section active">
+    <div class="grid-2">
+      
+      <!-- Kolom Kiri: Form Tambah / Edit Produk -->
+      <div class="card">
+        <div class="card-title">
+          <span id="formTitle">➕ Tambah / Edit Produk</span>
+          <button class="btn btn-outline" style="padding:4px 8px; font-size:11px;" onclick="resetFormProduk()">Reset Form</button>
+        </div>
+
+        <!-- Area Kamera Pemindai Barcode -->
+        <div id="scannerWrapper">
+          <div id="reader"></div>
+          <div class="scanner-tools">
+            <button type="button" id="btnTorch" class="btn btn-accent" style="flex:1;" onclick="toggleTorch()" disabled>🔦 Senter</button>
+            <button type="button" class="btn btn-danger" style="flex:1;" onclick="stopProductScanner()">✖ Tutup Kamera</button>
+          </div>
+        </div>
+
+        <form id="formProduk" onsubmit="handleSimpanProduk(event)">
+          <div class="form-group">
+            <label>Kode Barcode / Kode Internal *</label>
+            <div class="input-with-btn">
+              <input type="text" id="pKode" placeholder="Scan atau ketik kode..." required>
+              <button type="button" class="btn btn-primary" onclick="startProductScanner()">📷 Scan</button>
+              <button type="button" class="btn btn-outline" onclick="generateAutoCode()" title="Buat kode untuk makanan/minuman non-barcode">⚡ Auto</button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Nama Barang / Menu *</label>
+            <input type="text" id="pNama" placeholder="Contoh: Chitato Sapi Panggang 68g" required>
+          </div>
+
+          <div class="grid-2" style="gap: 10px;">
+            <div class="form-group">
+              <label>Kategori</label>
+              <select id="pKategori">
+                <option value="Snack">Snack</option>
+                <option value="Minuman">Minuman</option>
+                <option value="Makanan">Makanan</option>
+                <option value="Sembako/Harian">Sembako/Harian</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Pelacakan Stok</label>
+              <select id="pKelolaStok" onchange="toggleStokInputs()">
+                <option value="YA">YA (Potong Stok Otomatis)</option>
+                <option value="TIDAK">TIDAK (Makanan/Racikan)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="grid-2" style="gap: 10px;">
+            <div class="form-group">
+              <label>Harga Modal / Beli (Rp)</label>
+              <input type="number" id="pModal" placeholder="0" min="0" value="0">
+            </div>
+            <div class="form-group">
+              <label>Harga Jual (Rp) *</label>
+              <input type="number" id="pJual" placeholder="0" min="0" required>
+            </div>
+          </div>
+
+          <div id="stokInputGroup" class="grid-2" style="gap: 10px;">
+            <div class="form-group">
+              <label>Stok Saat Ini</label>
+              <input type="number" id="pStok" value="0">
+            </div>
+            <div class="form-group">
+              <label>Batas Stok Menipis</label>
+              <input type="number" id="pStokMin" value="5">
+            </div>
+          </div>
+
+          <button type="submit" id="btnSimpanProduk" class="btn btn-success btn-block">💾 Simpan ke Google Sheets</button>
+        </form>
+      </div>
+
+      <!-- Kolom Kanan: Daftar Produk Tersimpan -->
+      <div class="card">
+        <div class="card-title">
+          <span>📦 Daftar Barang (<span id="countProduk">0</span>)</span>
+          <button class="btn btn-outline" style="padding:4px 10px; font-size:12px;" onclick="syncProdukFromServer()">🔄 Refresh</button>
+        </div>
+
+        <div class="filter-bar">
+          <input type="text" id="searchProduk" placeholder="Cari nama atau scan kode..." onkeyup="renderProdukList()">
+          <select id="filterKategori" onchange="renderProdukList()" style="width: auto;">
+            <option value="ALL">Semua Kategori</option>
+            <option value="Snack">Snack</option>
+            <option value="Minuman">Minuman</option>
+            <option value="Makanan">Makanan</option>
+            <option value="Sembako/Harian">Sembako/Harian</option>
+          </select>
+        </div>
+
+        <div id="produkListContainer" style="max-height: 520px; overflow-y: auto;">
+          <div style="text-align:center; color:var(--muted); padding: 30px 10px; font-size: 13px;">
+            Belum ada data. Masukkan URL API di tab <b>Pengaturan</b> terlebih dahulu.
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- TAB 3: PENGATURAN KONEKSI API -->
+  <div id="view-pengaturan" class="view-section">
+    <div class="card" style="max-width: 600px; margin: 0 auto;">
+      <div class="card-title">⚙️ Pengaturan Koneksi Google Apps Script</div>
+      <div class="form-group">
+        <label>URL Web App Google Apps Script (Berakhiran /exec)</label>
+        <input type="text" id="inputApiUrl" placeholder="https://script.google.com/macros/s/AKfycb.../exec">
+      </div>
+      <button class="btn btn-primary btn-block" onclick="saveApiUrl()">Simpan & Hubungkan Sekarang</button>
+      
+      <div style="margin-top: 16px; padding: 12px; background: #f8fafc; border-radius: 8px; font-size: 12px; color: var(--muted);">
+        <b>Catatan Teknis:</b> URL ini disimpan secara lokal di browser tablet Anda. Setelah terhubung, daftar produk akan di-<i>cache</i> di tablet sehingga pemindaian barcode berjalan secepat kilat tanpa jeda internet.
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Navigasi Bawah -->
+<div class="bottom-nav">
+  <button class="nav-btn" id="nav-kasir" onclick="switchTab('kasir')">
+    <span class="icon">🛒</span>
+    <span>Kasir</span>
+  </button>
+  <button class="nav-btn active" id="nav-produk" onclick="switchTab('produk')">
+    <span class="icon">📦</span>
+    <span>Produk & Stok</span>
+  </button>
+  <button class="nav-btn" id="nav-pengaturan" onclick="switchTab('pengaturan')">
+    <span class="icon">⚙️</span>
+    <span>Pengaturan API</span>
+  </button>
+</div>
+
 <script>
+  // State Global
+  let API_URL = localStorage.getItem("WARUNG_API_URL") || "";
+  let produkList = JSON.parse(localStorage.getItem("WARUNG_PRODUK_CACHE") || "[]");
+  
+  // State Scanner
   let html5QrCode = null;
   let isScanning = false;
   let torchOn = false;
-
-  // Variabel Pengaman Konsensus & Jeda
   let candidateCode = "";
   let candidateCount = 0;
-  let lastAcceptedCode = "";
-  let lastAcceptedTime = 0;
 
-  const scannedItems = {};
+  window.onload = function() {
+    document.getElementById("inputApiUrl").value = API_URL;
+    if (produkList.length > 0) {
+      renderProdukList();
+    }
+    if (API_URL) {
+      syncProdukFromServer();
+    } else {
+      switchTab("pengaturan");
+      showToast("Silakan masukkan URL Web App GAS terlebih dahulu.");
+    }
+  };
 
+  function showToast(msg) {
+    const t = document.getElementById("toast");
+    t.innerText = msg;
+    t.style.display = "block";
+    setTimeout(() => { t.style.display = "none"; }, 3000);
+  }
+
+  function switchTab(tabName) {
+    if (isScanning) stopProductScanner();
+    document.querySelectorAll(".view-section").forEach(el => el.classList.remove("active"));
+    document.querySelectorAll(".nav-btn").forEach(el => el.classList.remove("active"));
+    
+    document.getElementById("view-" + tabName).classList.add("active");
+    document.getElementById("nav-" + tabName).classList.add("active");
+  }
+
+  // --- KONEKSI API & SINKRONISASI ---
+  function saveApiUrl() {
+    const url = document.getElementById("inputApiUrl").value.trim();
+    if (!url.startsWith("https://script.google.com/")) {
+      alert("URL tidak valid. Pastikan URL diawali https://script.google.com/ dan diakhiri /exec");
+      return;
+    }
+    API_URL = url;
+    localStorage.setItem("WARUNG_API_URL", API_URL);
+    syncProdukFromServer();
+    switchTab("produk");
+  }
+
+  async function syncProdukFromServer() {
+    if (!API_URL) {
+      showToast("URL API belum diatur!");
+      return;
+    }
+    const dot = document.getElementById("connDot");
+    const txt = document.getElementById("connText");
+    txt.innerText = "Menyinkronkan...";
+
+    try {
+      const response = await fetch(API_URL + "?action=getProduk");
+      const result = await response.json();
+      
+      if (result.status === "success") {
+        produkList = result.data || [];
+        localStorage.setItem("WARUNG_PRODUK_CACHE", JSON.stringify(produkList));
+        dot.className = "dot online";
+        txt.innerText = "Terhubung (" + produkList.length + " item)";
+        renderProdukList();
+        showToast("✅ Data produk berhasil disinkronkan!");
+      } else {
+        throw new Error(result.message);
+      }
+    } catch (err) {
+      dot.className = "dot offline";
+      txt.innerText = "Gagal Terhubung";
+      showToast("❌ Gagal mengambil data: " + err.message);
+    }
+  }
+
+  // --- MANAJEMEN PRODUK & STOK ---
+  function toggleStokInputs() {
+    const val = document.getElementById("pKelolaStok").value;
+    document.getElementById("stokInputGroup").style.display = (val === "YA") ? "grid" : "none";
+  }
+
+  function generateAutoCode() {
+    const kat = document.getElementById("pKategori").value;
+    const prefixMap = {
+      "Makanan": "MKN",
+      "Minuman": "MNM",
+      "Snack": "SNK",
+      "Sembako/Harian": "SMB"
+    };
+    const prefix = prefixMap[kat] || "BRG";
+    const randomNum = Math.floor(100 + Math.random() * 900);
+    document.getElementById("pKode").value = `${prefix}-${randomNum}`;
+    document.getElementById("pKelolaStok").value = "TIDAK";
+    toggleStokInputs();
+    document.getElementById("pNama").focus();
+  }
+
+  function editProduk(kode) {
+    const item = produkList.find(p => p.kode_barcode === kode);
+    if (!item) return;
+
+    document.getElementById("formTitle").innerText = "✏️ Edit / Tambah Stok Produk";
+    document.getElementById("pKode").value = item.kode_barcode;
+    document.getElementById("pNama").value = item.nama_produk;
+    document.getElementById("pKategori").value = item.kategori;
+    document.getElementById("pModal").value = item.harga_modal;
+    document.getElementById("pJual").value = item.harga_jual;
+    document.getElementById("pKelolaStok").value = item.kelola_stok ? "YA" : "TIDAK";
+    document.getElementById("pStok").value = item.stok_saat_ini;
+    document.getElementById("pStokMin").value = item.stok_minimal;
+    toggleStokInputs();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function resetFormProduk() {
+    document.getElementById("formTitle").innerText = "➕ Tambah / Edit Produk";
+    document.getElementById("formProduk").reset();
+    document.getElementById("pKelolaStok").value = "YA";
+    toggleStokInputs();
+  }
+
+  async function handleSimpanProduk(e) {
+    e.preventDefault();
+    if (!API_URL) {
+      alert("Atur URL API terlebih dahulu di menu Pengaturan!");
+      return;
+    }
+
+    const btn = document.getElementById("btnSimpanProduk");
+    btn.disabled = true;
+    btn.innerText = "⏳ Menyimpan ke Google Sheets...";
+
+    const payload = {
+      action: "simpanProduk",
+      data: {
+        kode_barcode: document.getElementById("pKode").value.trim(),
+        nama_produk: document.getElementById("pNama").value.trim(),
+        kategori: document.getElementById("pKategori").value,
+        harga_modal: Number(document.getElementById("pModal").value) || 0,
+        harga_jual: Number(document.getElementById("pJual").value) || 0,
+        kelola_stok: document.getElementById("pKelolaStok").value === "YA",
+        stok_saat_ini: Number(document.getElementById("pStok").value) || 0,
+        stok_minimal: Number(document.getElementById("pStokMin").value) || 5
+      }
+    };
+
+    try {
+      // Gunakan text/plain agar bebas dari blokir CORS preflight Chrome pada GAS
+      const res = await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify(payload)
+      });
+      const result = await res.json();
+
+      if (result.status === "success") {
+        showToast("✅ Produk berhasil disimpan!");
+        resetFormProduk();
+        await syncProdukFromServer();
+      } else {
+        throw new Error(result.message);
+      }
+    } catch (err) {
+      alert("Gagal menyimpan produk: " + err.message);
+    } finally {
+      btn.disabled = false;
+      btn.innerText = "💾 Simpan ke Google Sheets";
+    }
+  }
+
+  function renderProdukList() {
+    const container = document.getElementById("produkListContainer");
+    const keyword = document.getElementById("searchProduk").value.toLowerCase();
+    const katFilter = document.getElementById("filterKategori").value;
+
+    const filtered = produkList.filter(p => {
+      const matchKat = (katFilter === "ALL") || (p.kategori === katFilter);
+      const matchKey = p.nama_produk.toLowerCase().includes(keyword) || p.kode_barcode.toLowerCase().includes(keyword);
+      return matchKat && matchKey;
+    });
+
+    document.getElementById("countProduk").innerText = filtered.length;
+
+    if (filtered.length === 0) {
+      container.innerHTML = `<div style="text-align:center; color:var(--muted); padding:24px; font-size:13px;">Tidak ada barang yang cocok.</div>`;
+      return;
+    }
+
+    let html = "";
+    filtered.forEach(p => {
+      let stokBadge = "";
+      if (!p.kelola_stok) {
+        stokBadge = `<span class="badge badge-nostock">Non-Stok</span>`;
+      } else if (p.stok_saat_ini <= p.stok_minimal) {
+        stokBadge = `<span class="badge badge-low">Stok Menipis: ${p.stok_saat_ini}</span>`;
+      } else {
+        stokBadge = `<span class="badge badge-ok">Stok: ${p.stok_saat_ini}</span>`;
+      }
+
+      html += `
+        <div class="prod-item" onclick="editProduk('${p.kode_barcode}')">
+          <div>
+            <div class="prod-name">${p.nama_produk}</div>
+            <div class="prod-meta">${p.kode_barcode} • ${p.kategori} (Modal: Rp${p.harga_modal.toLocaleString("id-ID")})</div>
+            ${stokBadge}
+          </div>
+          <div class="prod-price">
+            Rp${p.harga_jual.toLocaleString("id-ID")}
+            <div style="font-size:11px; color:var(--muted); font-weight:normal; margin-top:4px;">Ketuk untuk edit</div>
+          </div>
+        </div>
+      `;
+    });
+
+    container.innerHTML = html;
+  }
+
+  // --- PEMINDAI KAMERA BARCODE (DENGAN VALIDASI 3X KONSENSUS) ---
   function playBeep() {
     try {
       const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -202,36 +608,26 @@
     if (navigator.vibrate) navigator.vibrate(100);
   }
 
-  function updateStatus(msg, type = "info") {
-    const box = document.getElementById("statusBox");
-    box.innerHTML = msg;
-    box.className = "status-box" + (type === "error" ? " error" : type === "success" ? " success" : "");
-  }
-
-  // Validasi Checksum Matematika Standar Barcode Ritel (EAN-13, EAN-8, UPC-A)
   function isValidRetailBarcode(code, formatName) {
     if (formatName === "EAN_13" || formatName === "EAN_8" || formatName === "UPC_A") {
       if (!/^\d+$/.test(code)) return false;
       const digits = code.split("").map(Number);
       const checkDigit = digits.pop();
       let sum = 0;
-      digits.reverse().forEach((d, idx) => {
-        sum += (idx % 2 === 0) ? d * 3 : d * 1;
-      });
-      const calculatedCheck = (10 - (sum % 10)) % 10;
-      return checkDigit === calculatedCheck;
+      digits.reverse().forEach((d, idx) => { sum += (idx % 2 === 0) ? d * 3 : d * 1; });
+      return checkDigit === ((10 - (sum % 10)) % 10);
     }
-    // Untuk QR_CODE atau CODE_128 minimal panjang 4 karakter
     return code.length >= 4;
   }
 
-  async function startScanner() {
+  async function startProductScanner() {
     if (isScanning) return;
     playBeep();
-    updateStatus("Membuka kamera HD...");
+    document.getElementById("scannerWrapper").style.display = "block";
+    candidateCode = "";
+    candidateCount = 0;
 
     try {
-      // Hanya aktifkan format barcode produk ritel & QR (buang CODE_39 yang sering salah baca)
       const formatsToSupport = [
         Html5QrcodeSupportedFormats.EAN_13,
         Html5QrcodeSupportedFormats.EAN_8,
@@ -239,177 +635,60 @@
         Html5QrcodeSupportedFormats.CODE_128,
         Html5QrcodeSupportedFormats.QR_CODE
       ];
-
-      html5QrCode = new Html5Qrcode("reader", { formatsToSupport: formatsToSupport, verbose: false });
-
-      const config = {
-        fps: 20,
-        qrbox: { width: 280, height: 120 }, // Kotak ramping agar fokus hanya pada garis barcode
-        videoConstraints: {
-          facingMode: "environment",
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
-        }
-      };
-
+      html5QrCode = new Html5Qrcode("reader", { formatsToSupport, verbose: false });
       await html5QrCode.start(
         { facingMode: "environment" },
-        config,
-        onScanSuccess,
+        { fps: 20, qrbox: { width: 260, height: 110 } },
+        (decodedText, decodedResult) => {
+          const fmt = decodedResult?.result?.format?.formatName || "BARCODE";
+          if (!isValidRetailBarcode(decodedText, fmt)) return;
+
+          if (decodedText === candidateCode) { candidateCount++; }
+          else { candidateCode = decodedText; candidateCount = 1; }
+
+          if (candidateCount >= 3) {
+            playBeep();
+            stopProductScanner();
+            
+            // Cek apakah barcode sudah ada di database
+            const existing = produkList.find(p => p.kode_barcode === decodedText);
+            if (existing) {
+              editProduk(decodedText);
+              showToast("📦 Barang sudah terdaftar! Mode edit/tambah stok dibuka.");
+            } else {
+              document.getElementById("pKode").value = decodedText;
+              document.getElementById("pNama").focus();
+              showToast("✅ Barcode terbaca! Silakan isi nama dan harga.");
+            }
+          }
+        },
         () => {}
       );
-
       isScanning = true;
-      document.getElementById("btnStart").style.display = "none";
-      document.getElementById("btnStop").disabled = false;
-      updateStatus("✅ Kamera aktif! Arahkan barcode sejajar dengan kotak pemindai.", "success");
-      checkCameraCapabilities();
-
+      const caps = html5QrCode.getRunningTrackCapabilities();
+      if (caps.torch) document.getElementById("btnTorch").disabled = false;
     } catch (err) {
-      updateStatus(`❌ Gagal membuka kamera: <b>${err.name || err}</b> - ${err.message || ""}`, "error");
+      alert("Gagal membuka kamera: " + err);
+      document.getElementById("scannerWrapper").style.display = "none";
     }
-  }
-
-  function checkCameraCapabilities() {
-    try {
-      const capabilities = html5QrCode.getRunningTrackCapabilities();
-      if (capabilities.torch) {
-        document.getElementById("btnTorch").disabled = false;
-      }
-      if (capabilities.zoom) {
-        const zoomContainer = document.getElementById("zoomContainer");
-        const slider = document.getElementById("zoomSlider");
-        zoomContainer.style.display = "flex";
-        slider.min = capabilities.zoom.min || 1;
-        slider.max = Math.min(capabilities.zoom.max || 4, 5);
-        slider.step = capabilities.zoom.step || 0.1;
-        slider.value = capabilities.zoom.min || 1;
-
-        slider.oninput = function() {
-          const val = parseFloat(this.value);
-          document.getElementById("zoomVal").innerText = val.toFixed(1) + "x";
-          html5QrCode.applyVideoConstraints({ advanced: [{ zoom: val }] });
-        };
-      }
-    } catch (e) {}
   }
 
   async function toggleTorch() {
     if (!isScanning || !html5QrCode) return;
-    try {
-      torchOn = !torchOn;
-      await html5QrCode.applyVideoConstraints({ advanced: [{ torch: torchOn }] });
-      const btn = document.getElementById("btnTorch");
-      btn.innerText = torchOn ? "🔦 Senter: ON" : "🔦 Senter: OFF";
-      btn.classList.toggle("active", torchOn);
-    } catch (e) {
-      updateStatus("Perangkat ini tidak mendukung kontrol senter.", "error");
-    }
+    torchOn = !torchOn;
+    await html5QrCode.applyVideoConstraints({ advanced: [{ torch: torchOn }] });
+    document.getElementById("btnTorch").innerText = torchOn ? "🔦 Senter: ON" : "🔦 Senter";
   }
 
-  function onScanSuccess(decodedText, decodedResult) {
-    const formatName = decodedResult?.result?.format?.formatName || "BARCODE";
-
-    // 1. Tolak jika tidak lolos rumus checksum barcode ritel
-    if (!isValidRetailBarcode(decodedText, formatName)) {
-      return;
-    }
-
-    // 2. Wajib terbaca SAMA PERSIS 3 kali berturut-turut untuk mencegah salah baca
-    if (decodedText === candidateCode) {
-      candidateCount++;
-    } else {
-      candidateCode = decodedText;
-      candidateCount = 1;
-    }
-
-    if (candidateCount < 3) {
-      return; // Belum mencapai 3x pembacaan identik, abaikan dulu
-    }
-
-    // Reset kandidat setelah lolos
-    candidateCode = "";
-    candidateCount = 0;
-
-    // 3. Jeda 2 detik agar 1 barang yang masih dipegang tidak terhitung ganda
-    const now = Date.now();
-    if (decodedText === lastAcceptedCode && (now - lastAcceptedTime) < 2000) {
-      return;
-    }
-
-    lastAcceptedCode = decodedText;
-    lastAcceptedTime = now;
-    playBeep();
-
-    const timeStr = new Date().toLocaleTimeString("id-ID");
-
-    if (scannedItems[decodedText]) {
-      scannedItems[decodedText].qty += 1;
-      scannedItems[decodedText].time = timeStr;
-    } else {
-      scannedItems[decodedText] = { format: formatName, qty: 1, time: timeStr };
-    }
-
-    updateStatus(`✅ Sah Terbaca: <b>${decodedText}</b> (${formatName})`, "success");
-    renderResults();
-  }
-
-  async function stopScanner() {
+  async function stopProductScanner() {
     if (!isScanning || !html5QrCode) return;
     try {
       await html5QrCode.stop();
       html5QrCode.clear();
-      isScanning = false;
-      torchOn = false;
-      candidateCode = "";
-      candidateCount = 0;
-      document.getElementById("btnStart").style.display = "block";
-      document.getElementById("btnStop").disabled = true;
-      document.getElementById("btnTorch").disabled = true;
-      document.getElementById("btnTorch").innerText = "🔦 Senter: OFF";
-      document.getElementById("btnTorch").classList.remove("active");
-      document.getElementById("zoomContainer").style.display = "none";
-      document.getElementById("reader").innerHTML = "Kamera dimatikan.";
-      updateStatus("Status: Kamera dimatikan.");
     } catch (e) {}
-  }
-
-  function renderResults() {
-    const listEl = document.getElementById("resultList");
-    const keys = Object.keys(scannedItems).reverse();
-    let totalItem = 0;
-
-    if (keys.length === 0) {
-      listEl.innerHTML = `<div style="text-align:center; color:#94a3b8; font-size:13px; padding:16px 0;">Belum ada barang yang di-scan.</div>`;
-      document.getElementById("totalCount").innerText = "0";
-      return;
-    }
-
-    let html = "";
-    keys.forEach(code => {
-      const item = scannedItems[code];
-      totalItem += item.qty;
-      html += `
-        <div class="scan-item">
-          <div>
-            <div class="code-val">${code}</div>
-            <div class="code-meta">Format: ${item.format} • Jam: ${item.time}</div>
-          </div>
-          <div class="qty-badge">${item.qty}x</div>
-        </div>
-      `;
-    });
-
-    listEl.innerHTML = html;
-    document.getElementById("totalCount").innerText = totalItem;
-  }
-
-  function clearResults() {
-    for (let k in scannedItems) delete scannedItems[k];
-    lastAcceptedCode = "";
-    candidateCode = "";
-    candidateCount = 0;
-    renderResults();
+    isScanning = false;
+    torchOn = false;
+    document.getElementById("scannerWrapper").style.display = "none";
   }
 </script>
 
